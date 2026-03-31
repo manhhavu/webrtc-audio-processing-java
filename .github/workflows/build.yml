@@ -1,0 +1,112 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-aarch64
+            lib: libapm.dylib
+          - os: ubuntu-latest
+            target: linux-x86_64
+            lib: libapm.so
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout webrtc-audio-processing
+        uses: actions/checkout@v4
+        with:
+          repository: tonarino/webrtc-audio-processing
+          path: webrtc-audio-processing-crate
+          submodules: recursive
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install meson ninja
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install rust-objcopy
+        run: rustup component add llvm-tools
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Adjust Cargo.toml paths for CI
+        run: |
+          sed -i.bak 's|path = "../../webrtc-audio-processing"|path = "../webrtc-audio-processing-crate"|' native/Cargo.toml
+          sed -i.bak 's|path = "../../webrtc-audio-processing/webrtc-audio-processing-config"|path = "../webrtc-audio-processing-crate/webrtc-audio-processing-config"|' native/Cargo.toml
+
+      - name: Build native library
+        working-directory: native
+        run: cargo build --release
+
+      - name: Build Java
+        run: ./gradlew build -x test
+
+      - name: Run tests
+        env:
+          APM_LIB_PATH: ${{ github.workspace }}/native/target/release
+        run: ./gradlew test
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: native/target/release/${{ matrix.lib }}
+
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Download macOS native
+        uses: actions/download-artifact@v4
+        with:
+          name: native-macos-aarch64
+          path: webrtc-audio-processing-natives/build/natives/macos-aarch64
+
+      - name: Download Linux native
+        uses: actions/download-artifact@v4
+        with:
+          name: native-linux-x86_64
+          path: webrtc-audio-processing-natives/build/natives/linux-x86_64
+
+      - name: Package classifier JARs
+        run: ./gradlew :webrtc-audio-processing-natives:assemble
+
+      - name: Upload JARs
+        uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: |
+            webrtc-audio-processing/build/libs/*.jar
+            webrtc-audio-processing-natives/build/libs/*.jar
