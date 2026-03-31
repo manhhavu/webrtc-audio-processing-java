@@ -89,6 +89,11 @@ subprojects {
 
 // JReleaser at root level — points to staging dirs from all publishable subprojects
 jreleaser {
+    project {
+        description.set("Java wrapper for WebRTC audio processing (echo cancellation, noise suppression, gain control)")
+        copyright.set("Google Inc.")
+    }
+
     signing {
         active.set(org.jreleaser.model.Active.ALWAYS)
         armored.set(true)
