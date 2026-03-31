@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-natives:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-aarch64
+            lib: libapm.dylib
+          - os: ubuntu-latest
+            target: linux-x86_64
+            lib: libapm.so
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout webrtc-audio-processing
+        uses: actions/checkout@v4
+        with:
+          repository: tonarino/webrtc-audio-processing
+          path: webrtc-audio-processing-crate
+          submodules: recursive
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install meson ninja
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install rust-objcopy
+        run: rustup component add llvm-tools
+
+      - name: Adjust Cargo.toml paths for CI
+        run: |
+          sed -i.bak 's|path = "../../webrtc-audio-processing"|path = "../webrtc-audio-processing-crate"|' native/Cargo.toml
+          sed -i.bak 's|path = "../../webrtc-audio-processing/webrtc-audio-processing-config"|path = "../webrtc-audio-processing-crate/webrtc-audio-processing-config"|' native/Cargo.toml
+
+      - name: Build native library
+        working-directory: native
+        run: cargo build --release
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: native/target/release/${{ matrix.lib }}
+
+  publish:
+    needs: build-natives
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set project version from tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#v}"
+          echo "Publishing version: $VERSION"
+          sed -i "s/version = \"0.1.0-SNAPSHOT\"/version = \"$VERSION\"/" build.gradle.kts
+
+      - name: Download macOS native
+        uses: actions/download-artifact@v4
+        with:
+          name: native-macos-aarch64
+          path: webrtc-audio-processing-natives/build/natives/macos-aarch64
+
+      - name: Download Linux native
+        uses: actions/download-artifact@v4
+        with:
+          name: native-linux-x86_64
+          path: webrtc-audio-processing-natives/build/natives/linux-x86_64
+
+      - name: Build and stage JARs
+        run: |
+          ./gradlew build -x test
+          ./gradlew :webrtc-audio-processing:publishMavenPublicationToStagingRepository
+          ./gradlew :webrtc-audio-processing-natives:publishMavenPublicationToStagingRepository
+
+      - name: Publish to Maven Central (webrtc-audio-processing)
+        env:
+          JRELEASER_MAVENCENTRAL_SONATYPE_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          JRELEASER_MAVENCENTRAL_SONATYPE_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
+          JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
+          JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: ./gradlew :webrtc-audio-processing:jreleaserFullRelease
+
+      - name: Publish to Maven Central (webrtc-audio-processing-natives)
+        env:
+          JRELEASER_MAVENCENTRAL_SONATYPE_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          JRELEASER_MAVENCENTRAL_SONATYPE_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
+          JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
+          JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: ./gradlew :webrtc-audio-processing-natives:jreleaserFullRelease
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            webrtc-audio-processing/build/libs/*.jar
+            webrtc-audio-processing-natives/build/libs/*.jar

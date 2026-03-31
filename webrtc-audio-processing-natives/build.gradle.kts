@@ -48,3 +48,16 @@ platforms.forEach { platform ->
 tasks.named("assemble") {
     dependsOn(platforms.map { "${it}Jar" })
 }
+
+// Add classifier JARs to the maven publication
+afterEvaluate {
+    publishing {
+        publications {
+            named<MavenPublication>("maven") {
+                platforms.forEach { platform ->
+                    artifact(tasks.named("${platform}Jar"))
+                }
+            }
+        }
+    }
+}
