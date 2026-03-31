@@ -22,13 +22,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Checkout webrtc-audio-processing
-        uses: actions/checkout@v4
-        with:
-          repository: tonarino/webrtc-audio-processing
-          path: webrtc-audio-processing-crate
-          submodules: recursive
-
       - name: Install build dependencies (macOS)
         if: runner.os == 'macOS'
         run: brew install meson ninja
@@ -44,11 +37,6 @@ jobs:
 
       - name: Install rust-objcopy
         run: rustup component add llvm-tools
-
-      - name: Adjust Cargo.toml paths for CI
-        run: |
-          sed -i.bak 's|path = "../../webrtc-audio-processing"|path = "../webrtc-audio-processing-crate"|' native/Cargo.toml
-          sed -i.bak 's|path = "../../webrtc-audio-processing/webrtc-audio-processing-config"|path = "../webrtc-audio-processing-crate/webrtc-audio-processing-config"|' native/Cargo.toml
 
       - name: Build native library
         working-directory: native
