@@ -98,6 +98,7 @@ jobs:
           JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
           JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_SONATYPE_SKIP_PUBLICATION_CHECK: true
         run: ./gradlew jreleaserDeploy -Pversion=${{ steps.version.outputs.version }}
 
       - name: Create GitHub Release
