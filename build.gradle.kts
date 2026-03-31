@@ -87,6 +87,8 @@ subprojects {
         }
 
         configure<org.jreleaser.gradle.plugin.JReleaserExtension> {
+            gitRootSearch.set(true)
+
             project {
                 copyright.set("Google Inc.")
             }
