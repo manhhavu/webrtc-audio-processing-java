@@ -1,0 +1,12 @@
+[package]
+name = "webrtc-apm-java"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "apm"
+crate-type = ["cdylib"]
+
+[dependencies]
+webrtc-audio-processing = { path = "../../webrtc-audio-processing", features = ["bundled"] }
+webrtc-audio-processing-config = { path = "../../webrtc-audio-processing/webrtc-audio-processing-config" }
