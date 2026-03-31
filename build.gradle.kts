@@ -1,7 +1,7 @@
 plugins {
     java
     `maven-publish`
-    id("org.jreleaser") version "1.15.0" apply false
+    id("org.jreleaser") version "1.15.0"
 }
 
 allprojects {
@@ -34,7 +34,6 @@ subprojects {
 
     if (name in publishableModules) {
         apply(plugin = "maven-publish")
-        apply(plugin = "org.jreleaser")
 
         java {
             withSourcesJar()
@@ -85,27 +84,24 @@ subprojects {
                 }
             }
         }
+    }
+}
 
-        configure<org.jreleaser.gradle.plugin.JReleaserExtension> {
-            gitRootSearch.set(true)
+// JReleaser at root level — points to staging dirs from all publishable subprojects
+jreleaser {
+    signing {
+        active.set(org.jreleaser.model.Active.ALWAYS)
+        armored.set(true)
+    }
 
-            project {
-                copyright.set("Google Inc.")
-            }
-
-            signing {
-                active.set(org.jreleaser.model.Active.ALWAYS)
-                armored.set(true)
-            }
-
-            deploy {
-                maven {
-                    mavenCentral {
-                        create("sonatype") {
-                            active.set(org.jreleaser.model.Active.ALWAYS)
-                            url.set("https://central.sonatype.com/api/v1/publisher")
-                            stagingRepository(layout.buildDirectory.dir("staging-deploy").get().asFile.absolutePath)
-                        }
+    deploy {
+        maven {
+            mavenCentral {
+                create("sonatype") {
+                    active.set(org.jreleaser.model.Active.ALWAYS)
+                    url.set("https://central.sonatype.com/api/v1/publisher")
+                    publishableModules.forEach { moduleName ->
+                        stagingRepository("${moduleName}/build/staging-deploy")
                     }
                 }
             }
