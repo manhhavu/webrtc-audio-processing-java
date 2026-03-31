@@ -62,6 +62,10 @@ fn error_to_code(e: &webrtc_audio_processing::Error) -> i32 {
     }
 }
 
+fn i2b(v: i32) -> bool {
+    v != 0
+}
+
 // --- Lifecycle ---
 
 #[no_mangle]
@@ -125,7 +129,6 @@ pub extern "C" fn apm_processor_process_capture(
             .process_capture_frame(channels.iter_mut().map(|c| c.as_mut_slice()))
         {
             Ok(()) => {
-                // Copy processed data back
                 for (i, ch) in channels.iter().enumerate() {
                     let offset = i * samples_per_channel as usize;
                     slice[offset..offset + ch.len()].copy_from_slice(ch);
@@ -192,13 +195,15 @@ pub extern "C" fn apm_processor_analyze_render(
 }
 
 // --- Config setters ---
+// All setters update inst.config only. Call apm_apply_config() to apply.
+// Boolean parameters use i32 (0=false, nonzero=true) for JNA compatibility.
 
 #[no_mangle]
 pub extern "C" fn apm_set_pipeline(
     handle: i64,
     max_processing_rate: i32,
-    multi_ch_render: bool,
-    multi_ch_capture: bool,
+    multi_ch_render: i32,
+    multi_ch_capture: i32,
     downmix_method: i32,
 ) -> i32 {
     with_instance(handle, |inst| {
@@ -207,13 +212,20 @@ pub extern "C" fn apm_set_pipeline(
                 32000 => PipelineProcessingRate::Max32000Hz,
                 _ => PipelineProcessingRate::Max48000Hz,
             },
-            multi_channel_render: multi_ch_render,
-            multi_channel_capture: multi_ch_capture,
+            multi_channel_render: i2b(multi_ch_render),
+            multi_channel_capture: i2b(multi_ch_capture),
             capture_downmix_method: match downmix_method {
                 1 => DownmixMethod::UseFirstChannel,
                 _ => DownmixMethod::Average,
             },
         };
+        0
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn apm_apply_config(handle: i64) -> i32 {
+    with_instance(handle, |inst| {
         inst.processor.set_config(inst.config);
         0
     })
@@ -222,16 +234,17 @@ pub extern "C" fn apm_set_pipeline(
 #[no_mangle]
 pub extern "C" fn apm_set_high_pass_filter(
     handle: i64,
-    enabled: bool,
-    apply_in_full_band: bool,
+    enabled: i32,
+    apply_in_full_band: i32,
 ) -> i32 {
     with_instance(handle, |inst| {
-        inst.config.high_pass_filter = if enabled {
-            Some(HighPassFilter { apply_in_full_band })
+        inst.config.high_pass_filter = if i2b(enabled) {
+            Some(HighPassFilter {
+                apply_in_full_band: i2b(apply_in_full_band),
+            })
         } else {
             None
         };
-        inst.processor.set_config(inst.config);
         0
     })
 }
@@ -252,7 +265,6 @@ pub extern "C" fn apm_set_echo_canceller(handle: i64, mode: i32, stream_delay_ms
             }),
             _ => None,
         };
-        inst.processor.set_config(inst.config);
         0
     })
 }
@@ -260,12 +272,12 @@ pub extern "C" fn apm_set_echo_canceller(handle: i64, mode: i32, stream_delay_ms
 #[no_mangle]
 pub extern "C" fn apm_set_noise_suppression(
     handle: i64,
-    enabled: bool,
+    enabled: i32,
     level: i32,
-    analyze_linear_aec_output: bool,
+    analyze_linear_aec_output: i32,
 ) -> i32 {
     with_instance(handle, |inst| {
-        inst.config.noise_suppression = if enabled {
+        inst.config.noise_suppression = if i2b(enabled) {
             Some(NoiseSuppression {
                 level: match level {
                     0 => NoiseSuppressionLevel::Low,
@@ -273,12 +285,11 @@ pub extern "C" fn apm_set_noise_suppression(
                     3 => NoiseSuppressionLevel::VeryHigh,
                     _ => NoiseSuppressionLevel::Moderate,
                 },
-                analyze_linear_aec_output,
+                analyze_linear_aec_output: i2b(analyze_linear_aec_output),
             })
         } else {
             None
         };
-        inst.processor.set_config(inst.config);
         0
     })
 }
@@ -286,18 +297,17 @@ pub extern "C" fn apm_set_noise_suppression(
 #[no_mangle]
 pub extern "C" fn apm_set_pre_amplifier(
     handle: i64,
-    enabled: bool,
+    enabled: i32,
     fixed_gain_factor: f32,
 ) -> i32 {
     with_instance(handle, |inst| {
-        inst.config.capture_amplifier = if enabled {
+        inst.config.capture_amplifier = if i2b(enabled) {
             Some(CaptureAmplifier::PreAmplifier(PreAmplifier {
                 fixed_gain_factor,
             }))
         } else {
             None
         };
-        inst.processor.set_config(inst.config);
         0
     })
 }
@@ -305,19 +315,19 @@ pub extern "C" fn apm_set_pre_amplifier(
 #[no_mangle]
 pub extern "C" fn apm_set_capture_level_adjustment(
     handle: i64,
-    enabled: bool,
+    enabled: i32,
     pre_gain: f32,
     post_gain: f32,
-    mic_emu_enabled: bool,
+    mic_emu_enabled: i32,
     mic_emu_initial: u8,
 ) -> i32 {
     with_instance(handle, |inst| {
-        inst.config.capture_amplifier = if enabled {
+        inst.config.capture_amplifier = if i2b(enabled) {
             Some(CaptureAmplifier::CaptureLevelAdjustment(
                 CaptureLevelAdjustment {
                     pre_gain_factor: pre_gain,
                     post_gain_factor: post_gain,
-                    analog_mic_gain_emulation: if mic_emu_enabled {
+                    analog_mic_gain_emulation: if i2b(mic_emu_enabled) {
                         Some(AnalogMicGainEmulation {
                             initial_level: mic_emu_initial,
                         })
@@ -329,7 +339,6 @@ pub extern "C" fn apm_set_capture_level_adjustment(
         } else {
             None
         };
-        inst.processor.set_config(inst.config);
         0
     })
 }
@@ -337,14 +346,14 @@ pub extern "C" fn apm_set_capture_level_adjustment(
 #[no_mangle]
 pub extern "C" fn apm_set_gain_controller1(
     handle: i64,
-    enabled: bool,
+    enabled: i32,
     mode: i32,
     target_level_dbfs: u8,
     compression_gain_db: u8,
-    enable_limiter: bool,
+    enable_limiter: i32,
 ) -> i32 {
     with_instance(handle, |inst| {
-        if enabled {
+        if i2b(enabled) {
             let gc1 = GainController1 {
                 mode: match mode {
                     0 => GainControllerMode::AdaptiveAnalog,
@@ -353,14 +362,13 @@ pub extern "C" fn apm_set_gain_controller1(
                 },
                 target_level_dbfs,
                 compression_gain_db,
-                enable_limiter,
+                enable_limiter: i2b(enable_limiter),
                 analog_gain_controller: None,
             };
             inst.config.gain_controller = Some(GainController::GainController1(gc1));
         } else {
             inst.config.gain_controller = None;
         }
-        inst.processor.set_config(inst.config);
         0
     })
 }
@@ -368,21 +376,21 @@ pub extern "C" fn apm_set_gain_controller1(
 #[no_mangle]
 pub extern "C" fn apm_set_analog_gain_controller(
     handle: i64,
-    enabled: bool,
+    enabled: i32,
     startup_min_vol: i32,
     clipped_level_min: i32,
-    enable_digital_adaptive: bool,
+    enable_digital_adaptive: i32,
     clipped_level_step: i32,
     clipped_ratio_threshold: f32,
     clipped_wait_frames: i32,
 ) -> i32 {
     with_instance(handle, |inst| {
         if let Some(GainController::GainController1(ref mut gc1)) = inst.config.gain_controller {
-            gc1.analog_gain_controller = if enabled {
+            gc1.analog_gain_controller = if i2b(enabled) {
                 Some(AnalogGainController {
                     startup_min_volume: startup_min_vol,
                     clipped_level_min,
-                    enable_digital_adaptive,
+                    enable_digital_adaptive: i2b(enable_digital_adaptive),
                     clipped_level_step,
                     clipped_ratio_threshold,
                     clipped_wait_frames,
@@ -391,10 +399,9 @@ pub extern "C" fn apm_set_analog_gain_controller(
             } else {
                 None
             };
-            inst.processor.set_config(inst.config);
             0
         } else {
-            -6 // BadParameter
+            -6
         }
     })
 }
@@ -402,19 +409,19 @@ pub extern "C" fn apm_set_analog_gain_controller(
 #[no_mangle]
 pub extern "C" fn apm_set_clipping_predictor(
     handle: i64,
-    enabled: bool,
+    enabled: i32,
     mode: i32,
     window_length: i32,
     ref_window_length: i32,
     ref_window_delay: i32,
     clipping_threshold: f32,
     crest_factor_margin: f32,
-    use_predicted_step: bool,
+    use_predicted_step: i32,
 ) -> i32 {
     with_instance(handle, |inst| {
         if let Some(GainController::GainController1(ref mut gc1)) = inst.config.gain_controller {
             if let Some(ref mut agc) = gc1.analog_gain_controller {
-                agc.clipping_predictor = if enabled {
+                agc.clipping_predictor = if i2b(enabled) {
                     Some(ClippingPredictor {
                         mode: match mode {
                             1 => ClippingPredictorMode::AdaptiveStepClippingPeakPrediction,
@@ -426,12 +433,11 @@ pub extern "C" fn apm_set_clipping_predictor(
                         reference_window_delay: ref_window_delay,
                         clipping_threshold,
                         crest_factor_margin,
-                        use_predicted_step,
+                        use_predicted_step: i2b(use_predicted_step),
                     })
                 } else {
                     None
                 };
-                inst.processor.set_config(inst.config);
                 0
             } else {
                 -6
@@ -445,14 +451,14 @@ pub extern "C" fn apm_set_clipping_predictor(
 #[no_mangle]
 pub extern "C" fn apm_set_gain_controller2(
     handle: i64,
-    enabled: bool,
-    input_vol_controller: bool,
+    enabled: i32,
+    input_vol_controller: i32,
     fixed_digital_gain_db: f32,
 ) -> i32 {
     with_instance(handle, |inst| {
-        if enabled {
+        if i2b(enabled) {
             let gc2 = GainController2 {
-                input_volume_controller_enabled: input_vol_controller,
+                input_volume_controller_enabled: i2b(input_vol_controller),
                 adaptive_digital: None,
                 fixed_digital: FixedDigital {
                     gain_db: fixed_digital_gain_db,
@@ -462,7 +468,6 @@ pub extern "C" fn apm_set_gain_controller2(
         } else {
             inst.config.gain_controller = None;
         }
-        inst.processor.set_config(inst.config);
         0
     })
 }
@@ -470,7 +475,7 @@ pub extern "C" fn apm_set_gain_controller2(
 #[no_mangle]
 pub extern "C" fn apm_set_adaptive_digital(
     handle: i64,
-    enabled: bool,
+    enabled: i32,
     headroom_db: f32,
     max_gain_db: f32,
     initial_gain_db: f32,
@@ -479,7 +484,7 @@ pub extern "C" fn apm_set_adaptive_digital(
 ) -> i32 {
     with_instance(handle, |inst| {
         if let Some(GainController::GainController2(ref mut gc2)) = inst.config.gain_controller {
-            gc2.adaptive_digital = if enabled {
+            gc2.adaptive_digital = if i2b(enabled) {
                 Some(AdaptiveDigital {
                     headroom_db,
                     max_gain_db,
@@ -490,7 +495,6 @@ pub extern "C" fn apm_set_adaptive_digital(
             } else {
                 None
             };
-            inst.processor.set_config(inst.config);
             0
         } else {
             -6
@@ -557,15 +561,15 @@ pub extern "C" fn apm_processor_get_stats(
 }
 
 #[no_mangle]
-pub extern "C" fn apm_processor_set_output_will_be_muted(handle: i64, muted: bool) {
+pub extern "C" fn apm_processor_set_output_will_be_muted(handle: i64, muted: i32) {
     with_instance(handle, |inst| {
-        inst.processor.set_output_will_be_muted(muted);
+        inst.processor.set_output_will_be_muted(i2b(muted));
     });
 }
 
 #[no_mangle]
-pub extern "C" fn apm_processor_set_stream_key_pressed(handle: i64, pressed: bool) {
+pub extern "C" fn apm_processor_set_stream_key_pressed(handle: i64, pressed: i32) {
     with_instance(handle, |inst| {
-        inst.processor.set_stream_key_pressed(pressed);
+        inst.processor.set_stream_key_pressed(i2b(pressed));
     });
 }

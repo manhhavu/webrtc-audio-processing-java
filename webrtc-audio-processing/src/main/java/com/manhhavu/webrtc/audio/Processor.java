@@ -20,6 +20,7 @@ public class Processor implements AutoCloseable {
         applyNoiseSuppression(config.noiseSuppression());
         applyCaptureAmplifier(config.captureAmplifier());
         applyGainController(config.gainController());
+        ProcessorException.checkResult(lib.apm_apply_config(handle));
     }
 
     public void reinitialize() {
@@ -70,12 +71,12 @@ public class Processor implements AutoCloseable {
 
     public void setOutputWillBeMuted(boolean muted) {
         ensureOpen();
-        lib.apm_processor_set_output_will_be_muted(handle, muted);
+        lib.apm_processor_set_output_will_be_muted(handle, b2i(muted));
     }
 
     public void setStreamKeyPressed(boolean pressed) {
         ensureOpen();
-        lib.apm_processor_set_stream_key_pressed(handle, pressed);
+        lib.apm_processor_set_stream_key_pressed(handle, b2i(pressed));
     }
 
     public Stats getStats() {
@@ -125,19 +126,23 @@ public class Processor implements AutoCloseable {
         }
     }
 
+    private static int b2i(boolean b) {
+        return b ? 1 : 0;
+    }
+
     private void applyPipeline(Pipeline p) {
         if (p == null) return;
         ProcessorException.checkResult(lib.apm_set_pipeline(
                 handle,
                 p.maximumInternalProcessingRate().value(),
-                p.multiChannelRender(),
-                p.multiChannelCapture(),
+                b2i(p.multiChannelRender()),
+                b2i(p.multiChannelCapture()),
                 p.captureDownmixMethod().value()));
     }
 
     private void applyHighPassFilter(HighPassFilter hpf) {
         ProcessorException.checkResult(lib.apm_set_high_pass_filter(
-                handle, hpf != null, hpf != null && hpf.applyInFullBand()));
+                handle, b2i(hpf != null), b2i(hpf != null && hpf.applyInFullBand())));
     }
 
     private void applyEchoCanceller(EchoCanceller ec) {
@@ -153,58 +158,58 @@ public class Processor implements AutoCloseable {
 
     private void applyNoiseSuppression(NoiseSuppression ns) {
         ProcessorException.checkResult(lib.apm_set_noise_suppression(
-                handle, ns != null,
+                handle, b2i(ns != null),
                 ns != null ? ns.level().value() : 1,
-                ns != null && ns.analyzeLinearAecOutput()));
+                b2i(ns != null && ns.analyzeLinearAecOutput())));
     }
 
     private void applyCaptureAmplifier(CaptureAmplifier ca) {
         if (ca == null) {
-            ProcessorException.checkResult(lib.apm_set_pre_amplifier(handle, false, 1.0f));
+            ProcessorException.checkResult(lib.apm_set_pre_amplifier(handle, 0, 1.0f));
         } else if (ca instanceof CaptureAmplifier.PreAmplifier pa) {
-            ProcessorException.checkResult(lib.apm_set_pre_amplifier(handle, true, pa.fixedGainFactor()));
+            ProcessorException.checkResult(lib.apm_set_pre_amplifier(handle, 1, pa.fixedGainFactor()));
         } else if (ca instanceof CaptureAmplifier.CaptureLevelAdjustment cla) {
             var emu = cla.analogMicGainEmulation();
             ProcessorException.checkResult(lib.apm_set_capture_level_adjustment(
-                    handle, true, cla.preGainFactor(), cla.postGainFactor(),
-                    emu != null, emu != null ? (byte) emu.initialLevel() : (byte) -1));
+                    handle, 1, cla.preGainFactor(), cla.postGainFactor(),
+                    b2i(emu != null), emu != null ? (byte) emu.initialLevel() : (byte) -1));
         }
     }
 
     private void applyGainController(GainController gc) {
         if (gc == null) {
             ProcessorException.checkResult(lib.apm_set_gain_controller1(
-                    handle, false, 2, (byte) 3, (byte) 9, true));
+                    handle, 0, 2, (byte) 3, (byte) 9, 1));
             return;
         }
         if (gc instanceof GainController.GainController1 gc1) {
             ProcessorException.checkResult(lib.apm_set_gain_controller1(
-                    handle, true, gc1.mode().value(),
+                    handle, 1, gc1.mode().value(),
                     (byte) gc1.targetLevelDbfs(), (byte) gc1.compressionGainDb(),
-                    gc1.enableLimiter()));
+                    b2i(gc1.enableLimiter())));
             var agc = gc1.analogGainController();
             if (agc != null) {
                 ProcessorException.checkResult(lib.apm_set_analog_gain_controller(
-                        handle, true, agc.startupMinVolume(), agc.clippedLevelMin(),
-                        agc.enableDigitalAdaptive(), agc.clippedLevelStep(),
+                        handle, 1, agc.startupMinVolume(), agc.clippedLevelMin(),
+                        b2i(agc.enableDigitalAdaptive()), agc.clippedLevelStep(),
                         agc.clippedRatioThreshold(), agc.clippedWaitFrames()));
                 var cp = agc.clippingPredictor();
                 if (cp != null) {
                     ProcessorException.checkResult(lib.apm_set_clipping_predictor(
-                            handle, true, cp.mode().value(), cp.windowLength(),
+                            handle, 1, cp.mode().value(), cp.windowLength(),
                             cp.referenceWindowLength(), cp.referenceWindowDelay(),
                             cp.clippingThreshold(), cp.crestFactorMargin(),
-                            cp.usePredictedStep()));
+                            b2i(cp.usePredictedStep())));
                 }
             }
         } else if (gc instanceof GainController.GainController2 gc2) {
             ProcessorException.checkResult(lib.apm_set_gain_controller2(
-                    handle, true, gc2.inputVolumeControllerEnabled(),
+                    handle, 1, b2i(gc2.inputVolumeControllerEnabled()),
                     gc2.fixedDigital() != null ? gc2.fixedDigital().gainDb() : 0.0f));
             var ad = gc2.adaptiveDigital();
             if (ad != null) {
                 ProcessorException.checkResult(lib.apm_set_adaptive_digital(
-                        handle, true, ad.headroomDb(), ad.maxGainDb(), ad.initialGainDb(),
+                        handle, 1, ad.headroomDb(), ad.maxGainDb(), ad.initialGainDb(),
                         ad.maxGainChangeDbPerSecond(), ad.maxOutputNoiseLevelDbfs()));
             }
         }

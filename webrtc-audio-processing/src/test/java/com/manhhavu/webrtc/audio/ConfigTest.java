@@ -125,7 +125,10 @@ class ConfigTest {
                 new EchoCanceller.Full(null),
                 new NoiseSuppression(NoiseSuppressionLevel.HIGH, false),
                 new GainController.GainController1(
-                        GainControllerMode.ADAPTIVE_DIGITAL, 3, 9, true, null)));
+                        GainControllerMode.ADAPTIVE_ANALOG, 3, 9, true,
+                        new AnalogGainController(0, 70, true, 15, 0.1f, 300,
+                                new ClippingPredictor(ClippingPredictorMode.CLIPPING_EVENT_PREDICTION,
+                                        5, 5, 5, -1.0f, 3.0f, true)))));
         float[] frame = new float[480];
         processor.processCaptureFrame(frame);
     }
