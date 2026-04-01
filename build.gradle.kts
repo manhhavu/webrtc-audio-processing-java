@@ -82,6 +82,16 @@ subprojects {
                     name = "staging"
                     url = uri(layout.buildDirectory.dir("staging-deploy"))
                 }
+                maven {
+                    name = "snapshot"
+                    url = uri("https://central.sonatype.com/repository/maven-snapshots/")
+                    credentials {
+                        username = findProperty("mavenCentralUsername") as String?
+                            ?: System.getenv("MAVEN_CENTRAL_USERNAME")
+                        password = findProperty("mavenCentralPassword") as String?
+                            ?: System.getenv("MAVEN_CENTRAL_PASSWORD")
+                    }
+                }
             }
         }
     }

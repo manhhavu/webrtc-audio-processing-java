@@ -1,4 +1,4 @@
-name: Build
+name: CI
 
 on:
   push:
@@ -63,9 +63,12 @@ jobs:
           name: native-${{ matrix.target }}
           path: native/target/release/${{ matrix.lib }}
 
-  package:
+  publish-snapshot:
+    name: Publish SNAPSHOT
     needs: build
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -75,6 +78,15 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: Validate SNAPSHOT version
+        run: |
+          VERSION=$(./gradlew properties -q | grep "^version:" | awk '{print $2}')
+          if [[ ! "$VERSION" == *"SNAPSHOT"* ]]; then
+            echo "Error: Version $VERSION is not a SNAPSHOT version"
+            exit 1
+          fi
+          echo "Publishing version: $VERSION"
 
       - name: Download macOS native
         uses: actions/download-artifact@v5
@@ -88,13 +100,11 @@ jobs:
           name: native-linux-x86_64
           path: webrtc-audio-processing-natives/build/natives/linux-x86_64
 
-      - name: Package classifier JARs
-        run: ./gradlew :webrtc-audio-processing-natives:assemble
+      - name: Build
+        run: ./gradlew build -x test
 
-      - name: Upload JARs
-        uses: actions/upload-artifact@v5
-        with:
-          name: jars
-          path: |
-            webrtc-audio-processing/build/libs/*.jar
-            webrtc-audio-processing-natives/build/libs/*.jar
+      - name: Publish to Maven Central Snapshots
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: ./gradlew publishMavenPublicationToSnapshotRepository
