@@ -6,7 +6,7 @@ plugins {
 
 allprojects {
     group = "com.manhhavu"
-    version = rootProject.findProperty("version") as String? ?: "0.1.0-SNAPSHOT"
+    version = (rootProject.findProperty("releaseVersion") as String?) ?: "0.2.0-SNAPSHOT"
 }
 
 val publishableModules = setOf("webrtc-audio-processing", "webrtc-audio-processing-natives")

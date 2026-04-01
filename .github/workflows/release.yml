@@ -87,10 +87,10 @@ jobs:
           path: webrtc-audio-processing-natives/build/natives/linux-x86_64
 
       - name: Build
-        run: ./gradlew build -x test -Pversion=${{ steps.version.outputs.version }}
+        run: ./gradlew build -x test -PreleaseVersion=${{ steps.version.outputs.version }}
 
       - name: Stage artifacts
-        run: ./gradlew publishMavenPublicationToStagingRepository -Pversion=${{ steps.version.outputs.version }}
+        run: ./gradlew publishMavenPublicationToStagingRepository -PreleaseVersion=${{ steps.version.outputs.version }}
 
       - name: Deploy to Maven Central
         env:
@@ -100,7 +100,7 @@ jobs:
           JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_SONATYPE_SKIP_PUBLICATION_CHECK: true
-        run: ./gradlew jreleaserDeploy -Pversion=${{ steps.version.outputs.version }}
+        run: ./gradlew jreleaserDeploy -PreleaseVersion=${{ steps.version.outputs.version }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

@@ -81,7 +81,7 @@ jobs:
 
       - name: Validate SNAPSHOT version
         run: |
-          VERSION=$(./gradlew properties -q | grep "^version:" | awk '{print $2}')
+          VERSION=$(./gradlew :webrtc-audio-processing:properties -q | grep "^version:" | awk '{print $2}')
           if [[ ! "$VERSION" == *"SNAPSHOT"* ]]; then
             echo "Error: Version $VERSION is not a SNAPSHOT version"
             exit 1
