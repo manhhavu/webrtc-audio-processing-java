@@ -8,5 +8,5 @@ name = "apm"
 crate-type = ["cdylib"]
 
 [dependencies]
-webrtc-audio-processing = { version = "=2.0.1", features = ["bundled"] }
-webrtc-audio-processing-config = "=2.0.1"
+webrtc-audio-processing = { version = "=2.0.3", features = ["bundled"] }
+webrtc-audio-processing-config = "=2.0.3"

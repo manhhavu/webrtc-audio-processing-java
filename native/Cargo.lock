@@ -267,9 +267,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc-audio-processing"
-version = "2.0.1"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba9a359d7673585ce7a3f45bc6cb91c63577dfb1d001d7bfaa44cf45f1f09163"
+checksum = "e31cc7cbf143d9c3de985b113ddc3fddb4a60c7746635a69114f94a5b5af8f42"
 dependencies = [
  "webrtc-audio-processing-config",
  "webrtc-audio-processing-sys",
@@ -277,15 +277,15 @@ dependencies = [
 
 [[package]]
 name = "webrtc-audio-processing-config"
-version = "2.0.1"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d40fd661e8308e195e040fc3bfaf0243c98bd052f8a6651254135715edbb6746"
+checksum = "bb5a1fcf911c54bf3d0e022020f1626ae99add5728c65d345bacfbf3adbf2ef2"
 
 [[package]]
 name = "webrtc-audio-processing-sys"
-version = "2.0.1"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba793254e6ca6878b1d0b8f1b37493bbd228232a28245c112fec8157a6356b2b"
+checksum = "dbd9fcfbedf79b0c7bc0f627d4e9cd5efcb648dcfc271c15503194482b39b0e8"
 dependencies = [
  "anyhow",
  "autotools",
