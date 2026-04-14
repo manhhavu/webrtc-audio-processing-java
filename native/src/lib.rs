@@ -44,6 +44,25 @@ where
     f(instance)
 }
 
+/// Thread-safe read-only access to Instance.
+/// Used by processing calls (process_capture, analyze_render, process_render)
+/// which only need &self on the underlying Processor.
+fn with_instance_ref<F, R>(handle: i64, f: F) -> R
+where
+    F: FnOnce(&Instance) -> R,
+    R: Default,
+{
+    init_handles();
+    {
+        let guard = HANDLES.lock().unwrap();
+        if !guard.as_ref().unwrap().contains(&handle) {
+            return R::default();
+        }
+    }
+    let instance = unsafe { &*(handle as *const Instance) };
+    f(instance)
+}
+
 fn error_to_code(e: &webrtc_audio_processing::Error) -> i32 {
     use webrtc_audio_processing::Error::*;
     match e {
@@ -117,7 +136,7 @@ pub extern "C" fn apm_processor_process_capture(
     if data.is_null() {
         return -5;
     }
-    with_instance(handle, |inst| {
+    with_instance_ref(handle, |inst| {
         let total = (num_channels * samples_per_channel) as usize;
         let slice = unsafe { std::slice::from_raw_parts_mut(data, total) };
         let mut channels: Vec<Vec<f32>> = slice
@@ -150,7 +169,7 @@ pub extern "C" fn apm_processor_process_render(
     if data.is_null() {
         return -5;
     }
-    with_instance(handle, |inst| {
+    with_instance_ref(handle, |inst| {
         let total = (num_channels * samples_per_channel) as usize;
         let slice = unsafe { std::slice::from_raw_parts_mut(data, total) };
         let mut channels: Vec<Vec<f32>> = slice
@@ -183,7 +202,7 @@ pub extern "C" fn apm_processor_analyze_render(
     if data.is_null() {
         return -5;
     }
-    with_instance(handle, |inst| {
+    with_instance_ref(handle, |inst| {
         let total = (num_channels * samples_per_channel) as usize;
         let slice = unsafe { std::slice::from_raw_parts(data, total) };
         let channels: Vec<&[f32]> = slice.chunks(samples_per_channel as usize).collect();
@@ -517,7 +536,7 @@ pub extern "C" fn apm_processor_get_stats(
     out_residual_echo_likelihood_recent_max: *mut f64,
     out_delay_ms: *mut i32,
 ) -> i32 {
-    with_instance(handle, |inst| {
+    with_instance_ref(handle, |inst| {
         let stats = inst.processor.get_stats();
         unsafe {
             if !out_voice_detected.is_null() {
